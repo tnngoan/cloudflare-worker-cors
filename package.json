@@ -1,0 +1,11 @@
+{
+    "name": "cors-wrangler-worker",
+    "version": "0.0.1",
+    "description": "How to get CORS working with Wrangler and KV store easiest",
+    "main": "index.js",
+    "scripts": {},
+    "dependencies": {},
+    "keywords": [],
+    "author":"ngoan.n.tr@gmail.com",
+    "license": "MIT"
+}
