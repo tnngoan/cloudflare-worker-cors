@@ -4,8 +4,17 @@
     "description": "Easiest way to get CORS working with Cloudflare workers.",
     "main": "index.js",
     "scripts": {},
-    "dependencies": {},
+    "dependencies": {
+        "@babel/core": "^7.16.0",
+        "@babel/preset-env": "^7.16.4",
+        "babel-jest": "^27.4.2"
+    },
     "keywords": [],
     "author": "ngoan.n.tr@gmail.com",
-    "license": "MIT"
+    "license": "MIT",
+    "devDependencies": {
+        "install": "^0.13.0",
+        "jest": "^27.4.3",
+        "npm": "^8.1.4"
+    }
 }
