@@ -1,51 +1,64 @@
-addEventListener("fetch", (event) => {
-  event.respondWith(handleRequest(event.request));
-});
-/**
- * Respond with hello worker text
- * @param {Request} request
- */
-const defaultData = { text: "Hello World!" };
-
-const setCache = (key, data) => MAPS.put(key, data);
-const getCache = (key) => MAPS.get(key);
-
-async function saveData(request) {
-  const body = await request.text();
-  const ip = request.headers.get("CF-Connecting-IP");
-  const myKey = `data-${ip}`;
-  try {
-    JSON.parse(body);
-    await setCache(myKey, body);
-    return new Response(body, { status: 200 });
-  } catch (err) {
-    return new Response(err, { status: 500 });
-  }
+const allowedCORS = [
+  /^https:\/\/vibrant-art-map.netlify.app\/?$/,
+  /^http:\/\/localhost:3000\/?$/,
+  /^https:\/\/deploy-preview-\d+--vibrant-art-map.netlify.app\/?$/,
+]
+  
+// returns TRUE if the request has a valid domain
+function testCors(url) {
+  return allowedCORS.some(function(element) {
+    return url.match(element)
+  })
 }
 
-async function readData(request) {
-  const ip = request.headers.get("CF-Connecting-IP");
-  const myKey = `data-${ip}`;
-  let data;
-  const cache = await getCache(myKey);
-  if (!cache) {
-    await setCache(myKey, JSON.stringify(defaultData));
-    data = defaultData;
+async function addHeaders(request, responsePromise) {
+  response = await responsePromise
+  const origin = request.headers.get('origin')
+  if (!!origin && testCors(origin)) {
+    response.headers.set('Access-Control-Allow-Origin', origin)
+  }
+  return response
+}
+
+const corsHeaders = {
+  'Access-Control-Allow-Methods': 'GET,HEAD,POST,OPTIONS',
+  'Access-Control-Max-Age': '86400',
+}
+
+function handleOptions(request) {
+  // Make sure the necessary headers are present
+  // for this to be a valid pre-flight request
+  let headers = request.headers
+  if (
+    headers.get('Origin') !== null &&
+    headers.get('Access-Control-Request-Method') !== null &&
+    headers.get('Access-Control-Request-Headers') !== null
+  ) {
+    // Handle CORS pre-flight request.
+    // If you want to check or reject the requested method + headers
+    // you can do that here.
+
+    let respHeaders = {
+      ...corsHeaders,
+      // Allow all future content Request headers to go back to browser
+      // such as Authorization (Bearer) or X-Client-Name-Version
+      'Access-Control-Allow-Headers': request.headers.get(
+        'Access-Control-Request-Headers',
+      ),
+    }
+
+    return new Response(null, {
+      headers: respHeaders,
+    })
   } else {
-    data = JSON.parse(cache);
-  }
-  const body = JSON.stringify(data.maps || []).replace(/</g, "\\u003c");
-  return new Response(body, {
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-async function handleRequest(request) {
-  if (request.method === "PUT") {
-    return saveData(request);
-  } else {
-    return readData(request);
+    // Handle standard OPTIONS request.
+    // If you want to allow other HTTP Methods, you can do that here.
+    return new Response(null, {
+      headers: {
+        Allow: 'GET, HEAD, POST, OPTIONS',
+      },
+    })
   }
 }
 
-export { handleRequest };
+export { addHeaders,handleOptions };

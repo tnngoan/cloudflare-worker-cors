@@ -1,7 +1,7 @@
 {
     "name": "cloudflare-worker-cors",
     "version": "0.0.3",
-    "description": "How to get CORS working with Wrangler and KV store easiest",
+    "description": "Easiest way to get CORS working with Cloudflare workers.",
     "main": "index.js",
     "scripts": {},
     "dependencies": {},
