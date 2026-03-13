@@ -1,64 +1,113 @@
-const allowedCORS = [
-  /^https:\/\/vibrant-art-map.netlify.app\/?$/,
+const DEFAULT_ALLOWED_ORIGINS = [
+  /^https:\/\/vibrant-art-map\.netlify\.app\/?$/,
   /^http:\/\/localhost:3000\/?$/,
-  /^https:\/\/deploy-preview-\d+--vibrant-art-map.netlify.app\/?$/,
+  /^https:\/\/deploy-preview-\d+--vibrant-art-map\.netlify\.app\/?$/,
 ]
-  
-// returns TRUE if the request has a valid domain
-function testCors(url) {
-  return allowedCORS.some(function(element) {
-    return url.match(element)
-  })
+
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-async function addHeaders(request, responsePromise) {
-  response = await responsePromise
-  const origin = request.headers.get('origin')
-  if (!!origin && testCors(origin)) {
+function getAllowedOrigins(env) {
+  if (!env?.ALLOWED_ORIGINS) return DEFAULT_ALLOWED_ORIGINS
+  const extras = env.ALLOWED_ORIGINS.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((origin) => new RegExp(`^${escapeRegExp(origin)}\\/?$`))
+  return [...DEFAULT_ALLOWED_ORIGINS, ...extras]
+}
+
+// returns TRUE if the origin is in the allow list
+function testCors(origin, env) {
+  const allowed = getAllowedOrigins(env)
+  return allowed.some((pattern) => pattern.test(origin))
+}
+
+function isAllowedUpstream(url, env) {
+  if (!env?.ALLOWED_UPSTREAM_HOSTS) return true
+  const allowed = env.ALLOWED_UPSTREAM_HOSTS.split(',').map((s) => s.trim())
+  try {
+    const host = new URL(url).hostname
+    return allowed.includes(host)
+  } catch {
+    return false
+  }
+}
+
+async function addHeaders(request, responsePromise, env) {
+  const originalResponse = await responsePromise
+  const response = new Response(originalResponse.body, originalResponse)
+  const origin = request.headers.get('Origin')
+  if (origin && testCors(origin, env)) {
     response.headers.set('Access-Control-Allow-Origin', origin)
+    response.headers.set('Access-Control-Allow-Credentials', 'true')
+    response.headers.append('Vary', 'Origin')
   }
   return response
 }
 
 const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET,HEAD,POST,OPTIONS',
-  'Access-Control-Max-Age': '86400',
+  'Access-Control-Max-Age': '7200',
 }
 
-function handleOptions(request) {
-  // Make sure the necessary headers are present
-  // for this to be a valid pre-flight request
-  let headers = request.headers
+function handleOptions(request, env) {
+  const headers = request.headers
+  const origin = headers.get('Origin')
+
   if (
-    headers.get('Origin') !== null &&
+    origin !== null &&
     headers.get('Access-Control-Request-Method') !== null &&
     headers.get('Access-Control-Request-Headers') !== null
   ) {
     // Handle CORS pre-flight request.
-    // If you want to check or reject the requested method + headers
-    // you can do that here.
-
-    let respHeaders = {
+    const respHeaders = {
       ...corsHeaders,
-      // Allow all future content Request headers to go back to browser
-      // such as Authorization (Bearer) or X-Client-Name-Version
-      'Access-Control-Allow-Headers': request.headers.get(
+      'Access-Control-Allow-Headers': headers.get(
         'Access-Control-Request-Headers',
       ),
     }
 
-    return new Response(null, {
-      headers: respHeaders,
-    })
+    if (testCors(origin, env)) {
+      respHeaders['Access-Control-Allow-Origin'] = origin
+      respHeaders['Access-Control-Allow-Credentials'] = 'true'
+      respHeaders['Vary'] = 'Origin'
+    }
+
+    return new Response(null, { headers: respHeaders })
   } else {
     // Handle standard OPTIONS request.
-    // If you want to allow other HTTP Methods, you can do that here.
-    return new Response(null, {
-      headers: {
-        Allow: 'GET, HEAD, POST, OPTIONS',
-      },
-    })
+    const respHeaders = {
+      Allow: 'GET, HEAD, POST, OPTIONS',
+    }
+
+    if (origin && testCors(origin, env)) {
+      respHeaders['Access-Control-Allow-Origin'] = origin
+      respHeaders['Access-Control-Allow-Credentials'] = 'true'
+      respHeaders['Vary'] = 'Origin'
+    }
+
+    return new Response(null, { headers: respHeaders })
   }
 }
 
-export { addHeaders,handleOptions };
+export default {
+  async fetch(request, env) {
+    if (request.method === 'OPTIONS') {
+      return handleOptions(request, env)
+    }
+
+    if (!isAllowedUpstream(request.url, env)) {
+      return new Response('Forbidden', { status: 403 })
+    }
+
+    try {
+      const response = await addHeaders(request, fetch(request), env)
+      return response
+    } catch {
+      return new Response('Bad Gateway', { status: 502 })
+    }
+  },
+}
+
+export { addHeaders, handleOptions, testCors, isAllowedUpstream }

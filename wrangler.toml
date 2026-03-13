@@ -1,0 +1,8 @@
+name = "cloudflare-worker-cors"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# Uncomment and configure to add extra allowed origins (comma-separated)
+# [vars]
+# ALLOWED_ORIGINS = "https://my-other-app.example.com"
+# ALLOWED_UPSTREAM_HOSTS = "api.example.com,cdn.example.com"
